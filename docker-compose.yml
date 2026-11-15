@@ -3,7 +3,7 @@ services:
     image: mongo:7
     container_name: nosql_mongo
     ports:
-      - "27017:27017"
+      - "27018:27017" ##! mudei a rota do mongo pois tava dando conflito
     environment:
       MONGO_INITDB_DATABASE: logistica_db
     volumes:

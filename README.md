@@ -94,14 +94,50 @@ Acesse no navegador: `http://localhost:8501`
 ## 🖥️ Funcionalidades Implementadas
 
 1. **Gestão de Lotes & Inventário (MongoDB):** Cadastro de novos lotes com limites térmicos, dados fiscais e visualização do histórico completo de auditoria em JSON.
-2. **Torre de Controle — Telemetria em Tempo Real (Redis):** Monitoramento de GPS, velocidade e temperatura dos caminhões em trânsito com simulador de sensores e disparo de alertas quando a temperatura ultrapassa o limite cadastrado no MongoDB.
+2. **Torre de Controle — Telemetria em Tempo Real (Redis):** Monitoramento de GPS, velocidade e temperatura dos caminhões em trânsito com simulador de sensores, alertas Pub/Sub e histórico recente no Redis.
 3. **Otimizador de Rotas Logísticas (Neo4j):** Simulação interativa de bloqueios de trechos na malha viária com recálculo automático da menor rota e custo estimado via Cypher (`shortestPath`).
 4. **Despacho & Recebimento de Cargas (Integração):** Fluxo transacional entre bancos que registra a conclusão da entrega no histórico do **MongoDB** e altera o status do veículo para `DISPONIVEL` no **Redis**.
 
+### Controles Redis
+
+Na segunda aba do Streamlit, use os controles para iniciar e parar a simulação contínua e o consumidor Pub/Sub. Ambos começam parados; a assinatura do canal `alertas_logistica` roda em uma thread de fundo, sem bloquear a interface. Os workers pertencem ao recurso Redis compartilhado entre as sessões. O histórico recente fica na lista `historico_alertas` do Redis e permanece disponível mesmo quando o consumidor está parado. No encerramento do processo Streamlit, a instância compartilhada para os workers e fecha o cliente Redis.
+
+O método `atualizar_telemetria()` valida e grava todos os campos do hash do veículo de uma vez. `liberar_veiculo()` só altera um hash existente e completo. A gravação do alerta no histórico, sua deduplicação por cinco minutos e a publicação no canal são executadas em um script Lua atômico; o histórico é limitado aos dez alertas mais recentes. A verificação de possível acidente considera velocidade acima de 110 km/h ou queda de pelo menos 40 km/h a partir de uma velocidade anterior igual ou superior a 50 km/h.
+
+Alertas de temperatura comparam a telemetria aos limites dos lotes em trânsito no MongoDB. O método `verificar_desvio_rota()` aceita uma sequência de coordenadas planejadas, mas a malha atual do Neo4j não contém coordenadas geográficas; por isso, o desvio só pode ser calculado quando esses dados forem fornecidos.
+
 ---
 
+## Testes Automatizados
+
+Os testes unitários validam as regras dos serviços MongoDB, Redis e Neo4j. Também existem testes de integração com Redis real.
+
+Com o ambiente virtual ativado, execute:
+
+```bash
+python -m compileall -q .
+RUN_REDIS_INTEGRATION=1 python -m pytest -q
+```
+
+Os testes de integração do Redis utilizam banco e prefixo próprios para isolar suas chaves. Não é necessário executar `seed.py` para rodar os testes.
+
+## Roteiro de Demonstração
+
+1. Mostrar os três bancos ativos pelo Docker Compose e abrir a aplicação Streamlit.
+2. Cadastrar ou consultar um lote no MongoDB e apresentar seu histórico de auditoria.
+3. Iniciar a simulação da frota e demonstrar telemetria e alertas no Redis.
+4. Calcular uma rota no Neo4j, selecionar um critério e simular bloqueios de trechos.
+5. Registrar ou consultar o manifesto de um lote em trânsito.
+6. Confirmar a entrega e demonstrar a atualização no MongoDB e a liberação do veículo no Redis.
+7. Explicar a recuperação: se a liberação falhar, a operação fica `PENDENTE` e pode ser tentada novamente sem duplicar a entrega.
+
+**Atenção:** execute `seed.py` somente quando desejar preparar ou recriar os dados de demonstração. Faça backup antes, pois o script pode remover dados do grafo do projeto no Neo4j.
+
+
 ## 👥 Equipe
-* Integrante 1
-* Integrante 2
-* Integrante 3
-* Integrante 4
+1- Josenilton Cirne Ramalho Neto
+2- Rony Arthur Meireles Medeiros
+3- Mateus Moreira y Moreira Feitosa
+4- Petrus Alecsander da Silva Arimatea
+5- Nelson Francisco Suassuna Neto
+6- Carlos Eduardo Menezes Cavalcante
